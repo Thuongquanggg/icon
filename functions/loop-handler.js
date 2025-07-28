@@ -1,27 +1,19 @@
-
 // functions/loop-handler.js
 
-// !!! PHIÊN BẢN KHÔNG AN TOÀN - TOKEN ĐƯỢC DÁN TRỰC TIẾP VÀO ĐÂY !!!
-const GITHUB_TOKEN = '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';
-
-// =================================================================
-// Cảnh báo: KHÔNG BAO GIỜ đưa mã này lên GitHub công khai.
-// Khi triển khai chính thức, hãy xóa dòng trên và sử dụng phương pháp an toàn:
-// const GITHUB_TOKEN = process.env.GITHUB_TOKEN_SECRET;
-// =================================================================
-
+// Cấu hình headers để cho phép Cross-Origin (CORS)
+const corsHeaders = {
+    'Access-Control-Allow-Origin': '*', // Cho phép bất kỳ nguồn nào
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+};
 
 let loopState = { isRunning: false, workflowId: null, currentRunId: null, timeoutId: null };
-const RUN_INTERVAL = 2 * 60 * 1000; // 2 phút
+const RUN_INTERVAL = 2 * 60 * 1000;
 
 async function githubApi(endpoint, token, options = {}) {
-    const API_URL = 'https://api.github.com/repos/Thuongquanggg/Test'; // Thay repo nếu cần
+    const API_URL = 'https://api.github.com/repos/Thuongquanggg/Test';
     const response = await fetch(`${API_URL}${endpoint}`, {
-        headers: {
-            'Accept': 'application/vnd.github.v3+json',
-            'Authorization': `token ${token}`,
-            'X-GitHub-Api-Version': '2022-11-28'
-        },
+        headers: { 'Accept': 'application/vnd.github.v3+json', 'Authorization': `token ${token}`, 'X-GitHub-Api-Version': '2022-11-28' },
         ...options
     });
     if (!response.ok) {
@@ -37,6 +29,7 @@ async function findLatestRunForWorkflow(workflowId, token) {
     return runs.length > 0 ? runs[0] : null;
 }
 
+// Hàm executeLoopCycle bây giờ sẽ lưu lại token để dùng cho các lần lặp sau
 async function executeLoopCycle(token) {
     if (!loopState.isRunning) { console.log("Server: Vòng lặp đã dừng."); return; }
     try {
@@ -51,6 +44,7 @@ async function executeLoopCycle(token) {
                 if (!loopState.isRunning) return;
                 try {
                     console.log(`Server: Hết giờ. Dừng run ID: ${loopState.currentRunId}`);
+                    // Dùng lại token đã lưu để dừng
                     await githubApi(`/actions/runs/${loopState.currentRunId}/cancel`, token, { method: 'POST' });
                 } catch (e) { console.error(`Server: Lỗi khi dừng run:`, e.message); }
                 executeLoopCycle(token);
@@ -66,31 +60,42 @@ async function executeLoopCycle(token) {
 }
 
 exports.handler = async (event) => {
-    // Mã này sẽ sử dụng biến GITHUB_TOKEN đã được khai báo ở trên cùng của file.
-    
-    if (!GITHUB_TOKEN) {
-        return { statusCode: 500, body: JSON.stringify({ message: "Thiếu token GitHub trong file loop-handler.js." }) };
+    // Xử lý yêu cầu OPTIONS của CORS trước tiên
+    if (event.httpMethod === 'OPTIONS') {
+        return { statusCode: 204, headers: corsHeaders, body: '' };
     }
-    const { action, workflowId } = JSON.parse(event.body);
+
+    // Lấy dữ liệu từ body, bao gồm cả token
+    const { action, workflowId, token } = JSON.parse(event.body);
 
     if (action === 'start') {
-        if (loopState.isRunning) return { statusCode: 400, body: JSON.stringify({ message: "Vòng lặp đã chạy rồi." }) };
+        if (!token) {
+            return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ message: "Yêu cầu thiếu token." }) };
+        }
+        if (loopState.isRunning) {
+            return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ message: "Vòng lặp đã chạy rồi." }) };
+        }
         loopState.isRunning = true;
         loopState.workflowId = workflowId;
-        executeLoopCycle(GITHUB_TOKEN);
-        return { statusCode: 200, body: JSON.stringify({ message: `Đã bắt đầu vòng lặp.` }) };
+        // Bắt đầu vòng lặp và truyền token vào
+        executeLoopCycle(token);
+        return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ message: `Đã bắt đầu vòng lặp.` }) };
     }
+
     if (action === 'stop') {
-        if (!loopState.isRunning) return { statusCode: 400, body: JSON.stringify({ message: "Vòng lặp chưa chạy." }) };
-        if (loopState.timeoutId) clearTimeout(loopState.timeoutId);
-        if (loopState.currentRunId) {
-            try { await githubApi(`/actions/runs/${loopState.currentRunId}/cancel`, GITHUB_TOKEN, { method: 'POST' }); } catch (e) { /* Bỏ qua lỗi */ }
+        // Không cần token để dừng, vì vòng lặp đã lưu token rồi
+        if (!loopState.isRunning) {
+            return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ message: "Vòng lặp chưa chạy." }) };
         }
-        loopState = { isRunning: false, workflowId: null, currentRunId: null, timeoutId: null };
-        return { statusCode: 200, body: JSON.stringify({ message: "Đã dừng vòng lặp." }) };
+        if (loopState.timeoutId) clearTimeout(loopState.timeoutId);
+        // Đặt isRunning thành false để vòng lặp tự dừng ở lần kiểm tra tiếp theo
+        loopState.isRunning = false; 
+        return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ message: "Đã gửi lệnh dừng vòng lặp." }) };
     }
+
     if (action === 'status') {
-        return { statusCode: 200, body: JSON.stringify({ isRunning: loopState.isRunning, workflowId: loopState.workflowId }) };
+        return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ isRunning: loopState.isRunning, workflowId: loopState.workflowId }) };
     }
-    return { statusCode: 400, body: JSON.stringify({ message: "Hành động không hợp lệ." }) };
+
+    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ message: "Hành động không hợp lệ." }) };
 };

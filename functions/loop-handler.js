@@ -74,7 +74,7 @@ exports.handler = async (event) => {
         }
         if (loopState.isRunning) {
             return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ message: "Vòng lặp đã chạy rồi." }) };
-        }
+        } 
         loopState.isRunning = true;
         loopState.workflowId = workflowId;
         // Bắt đầu vòng lặp và truyền token vào

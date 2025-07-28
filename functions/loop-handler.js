@@ -1,21 +1,21 @@
+
 // functions/loop-handler.js
 
-// !!! PHIÊN BẢN KHÔNG AN TOÀN - CHỈ DÙNG ĐỂ THỬ NGHIỆM !!!
-// DÁN TOKEN CỦA BẠN VÀO ĐÂY
-const GITHUB_TOKEN_SECRET = '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';
+// !!! PHIÊN BẢN KHÔNG AN TOÀN - TOKEN ĐƯỢC DÁN TRỰC TIẾP VÀO ĐÂY !!!
+const GITHUB_TOKEN = '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';
 
 // =================================================================
-// Cảnh báo: Không bao giờ đưa mã nguồn có chứa token thật lên GitHub công khai.
-// Khi triển khai chính thức, hãy xóa dòng trên và sử dụng biến môi trường:
-// const GITHUB_TOKEN_SECRET = process.env.GITHUB_TOKEN_SECRET;
+// Cảnh báo: KHÔNG BAO GIỜ đưa mã này lên GitHub công khai.
+// Khi triển khai chính thức, hãy xóa dòng trên và sử dụng phương pháp an toàn:
+// const GITHUB_TOKEN = process.env.GITHUB_TOKEN_SECRET;
 // =================================================================
 
 
 let loopState = { isRunning: false, workflowId: null, currentRunId: null, timeoutId: null };
-const RUN_INTERVAL = 2 * 60 * 1000;
+const RUN_INTERVAL = 2 * 60 * 1000; // 2 phút
 
 async function githubApi(endpoint, token, options = {}) {
-    const API_URL = 'https://api.github.com/repos/Thuongquanggg/Test';
+    const API_URL = 'https://api.github.com/repos/Thuongquanggg/Test'; // Thay repo nếu cần
     const response = await fetch(`${API_URL}${endpoint}`, {
         headers: {
             'Accept': 'application/vnd.github.v3+json',
@@ -66,11 +66,10 @@ async function executeLoopCycle(token) {
 }
 
 exports.handler = async (event) => {
-    // Thay vì đọc từ process.env, hàm sẽ sử dụng biến GITHUB_TOKEN_SECRET đã khai báo ở trên
-    const GITHUB_TOKEN = GITHUB_TOKEN_SECRET;
-
-    if (!GITHUB_TOKEN || GITHUB_TOKEN === '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') {
-        return { statusCode: 500, body: JSON.stringify({ message: "Thiếu token GitHub trong file loop-handler.js" }) };
+    // Mã này sẽ sử dụng biến GITHUB_TOKEN đã được khai báo ở trên cùng của file.
+    
+    if (!GITHUB_TOKEN) {
+        return { statusCode: 500, body: JSON.stringify({ message: "Thiếu token GitHub trong file loop-handler.js." }) };
     }
     const { action, workflowId } = JSON.parse(event.body);
 
